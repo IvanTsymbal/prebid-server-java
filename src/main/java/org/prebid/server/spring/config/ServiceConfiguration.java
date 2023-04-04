@@ -30,6 +30,8 @@ import org.prebid.server.auction.VideoResponseFactory;
 import org.prebid.server.auction.VideoStoredRequestProcessor;
 import org.prebid.server.auction.WinningBidComparatorFactory;
 import org.prebid.server.auction.adjustment.BidAdjustmentFactorResolver;
+import org.prebid.server.auction.bidresponsesender.BidResponseSender;
+import org.prebid.server.auction.bidresponsesender.BidResponseSenderClient;
 import org.prebid.server.auction.categorymapping.BasicCategoryMappingService;
 import org.prebid.server.auction.categorymapping.CategoryMappingService;
 import org.prebid.server.auction.categorymapping.NoOpCategoryMappingService;
@@ -111,8 +113,10 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.context.annotation.Scope;
 import org.springframework.context.annotation.ScopedProxyMode;
+import org.springframework.web.client.RestTemplate;
 
 import javax.validation.constraints.Min;
 import java.io.IOException;
@@ -987,8 +991,19 @@ public class ServiceConfiguration {
     }
 
     @Bean
+    RestTemplate restTemplate() {
+        return new RestTemplate();
+    }
+
+    @Bean
     BidResponsePostProcessor bidResponsePostProcessor() {
         return BidResponsePostProcessor.noOp();
+    }
+
+    @Bean
+    @Primary
+    BidResponsePostProcessor bidResponseSender(BidResponseSenderClient bidResponseSenderClient) {
+        return new BidResponseSender(bidResponseSenderClient);
     }
 
     @Bean
