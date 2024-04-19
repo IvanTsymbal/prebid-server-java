@@ -32,4 +32,7 @@ public class BidScanResult {
 
     /** An array of issue objects {@link Issue}. Only available if known_creative is true. */
     List<Issue> issues;
+
+    /** An attributes object {@link CreativeAttributes}. Only available if known_creative is true. */
+    CreativeAttributes attributes;
 }

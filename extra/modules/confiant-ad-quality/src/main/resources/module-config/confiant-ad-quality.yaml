@@ -16,5 +16,9 @@ hooks:
         short-interval: 1000
         long-interval-attempts: 336
         long-interval: 1800000
+      brand-blocking-config:
+        config-url: ""
+        state-check-interval: 600000
+        timeout: 200
       scan-state-check-interval: 600000
       bidders-to-exclude-from-scan:

@@ -14,10 +14,11 @@ import org.prebid.server.auction.model.BidderResponse;
 import org.prebid.server.auction.privacy.enforcement.mask.UserFpdActivityMask;
 import org.prebid.server.hooks.execution.v1.bidder.AllProcessedBidResponsesPayloadImpl;
 import org.prebid.server.hooks.modules.com.confiant.adquality.core.AnalyticsMapper;
+import org.prebid.server.hooks.modules.com.confiant.adquality.core.BidsScanResultProcessor;
 import org.prebid.server.hooks.modules.com.confiant.adquality.core.BidsMapper;
 import org.prebid.server.hooks.modules.com.confiant.adquality.core.BidsScanResult;
 import org.prebid.server.hooks.modules.com.confiant.adquality.core.BidsScanner;
-import org.prebid.server.hooks.modules.com.confiant.adquality.model.GroupByIssues;
+import org.prebid.server.hooks.modules.com.confiant.adquality.model.ScanResultStatus;
 import org.prebid.server.hooks.modules.com.confiant.adquality.v1.model.InvocationResultImpl;
 import org.prebid.server.hooks.v1.InvocationAction;
 import org.prebid.server.hooks.v1.InvocationResult;
@@ -26,6 +27,7 @@ import org.prebid.server.hooks.v1.auction.AuctionInvocationContext;
 import org.prebid.server.hooks.v1.bidder.AllProcessedBidResponsesHook;
 import org.prebid.server.hooks.v1.bidder.AllProcessedBidResponsesPayload;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -38,14 +40,17 @@ public class ConfiantAdQualityBidResponsesScanHook implements AllProcessedBidRes
     private static final String CODE = "confiant-ad-quality-bid-responses-scan-hook";
 
     private final BidsScanner bidsScanner;
+    private final BidsScanResultProcessor bidsScanResultProcessor;
     private final List<String> biddersToExcludeFromScan;
     private final UserFpdActivityMask userFpdActivityMask;
 
     public ConfiantAdQualityBidResponsesScanHook(BidsScanner bidsScanner,
+                                                 BidsScanResultProcessor bidsScanResultProcessor,
                                                  List<String> biddersToExcludeFromScan,
                                                  UserFpdActivityMask userFpdActivityMask) {
 
         this.bidsScanner = Objects.requireNonNull(bidsScanner);
+        this.bidsScanResultProcessor = Objects.requireNonNull(bidsScanResultProcessor);
         this.biddersToExcludeFromScan = Objects.requireNonNull(biddersToExcludeFromScan);
         this.userFpdActivityMask = Objects.requireNonNull(userFpdActivityMask);
     }
@@ -97,29 +102,39 @@ public class ConfiantAdQualityBidResponsesScanHook implements AllProcessedBidRes
             AuctionInvocationContext auctionInvocationContext) {
 
         final boolean debugEnabled = auctionInvocationContext.debugEnabled();
-        final GroupByIssues<BidderResponse> groupByIssues = bidsScanResult.toGroupByIssues(scannedBidderResponses);
-        final List<BidderResponse> bidderResponsesWithIssues = groupByIssues.getWithIssues();
-        final List<BidderResponse> bidderResponsesWithoutIssues = groupByIssues.getWithoutIssues();
-        final boolean hasIssues = !bidderResponsesWithIssues.isEmpty();
+        final Map<ScanResultStatus, List<BidderResponse>> mapByStatus = bidsScanResultProcessor
+                .toMapByStatus(scannedBidderResponses, notScannedBidderResponses, bidsScanResult);
+
+        final boolean shouldUpdate = !mapByStatus.get(ScanResultStatus.HAS_ISSUE).isEmpty()
+                || !mapByStatus.get(ScanResultStatus.BLOCKED_BRAND).isEmpty()
+                || !mapByStatus.get(ScanResultStatus.BLOCKED_CATEGORY).isEmpty();
 
         final InvocationResultImpl.InvocationResultImplBuilder<AllProcessedBidResponsesPayload> resultBuilder =
                 InvocationResultImpl.<AllProcessedBidResponsesPayload>builder()
                         .status(InvocationStatus.success)
-                        .action(hasIssues
+                        .action(shouldUpdate
                                 ? InvocationAction.update
                                 : InvocationAction.no_action)
-                        .errors(hasIssues
+                        .errors(shouldUpdate
                                 ? bidsScanResult.getIssuesMessages()
                                 : null)
                         .debugMessages(debugEnabled
                                 ? bidsScanResult.getDebugMessages()
                                 : null)
-                        .analyticsTags(AnalyticsMapper.toAnalyticsTags(
-                                bidderResponsesWithIssues, bidderResponsesWithoutIssues, notScannedBidderResponses))
-                        .payloadUpdate(payload -> AllProcessedBidResponsesPayloadImpl.of(
-                                Stream.concat(bidderResponsesWithoutIssues.stream(), notScannedBidderResponses.stream()).toList()));
+                        .analyticsTags(AnalyticsMapper.toAnalyticsTags(mapByStatus))
+                        .payloadUpdate(payload -> AllProcessedBidResponsesPayloadImpl.of(toSafeBidderResponses(mapByStatus)));
 
         return resultBuilder.build();
+    }
+
+    private List<BidderResponse> toSafeBidderResponses(Map<ScanResultStatus, List<BidderResponse>> mapByStatus) {
+        return Stream.of(
+                mapByStatus.get(ScanResultStatus.NO_ISSUES),
+                mapByStatus.get(ScanResultStatus.DISALLOWED_BRAND),
+                mapByStatus.get(ScanResultStatus.DISALLOWED_CATEGORY),
+                mapByStatus.get(ScanResultStatus.NOT_SCANNED))
+                .flatMap(Collection::stream)
+                .collect(Collectors.toList());
     }
 
     @Override

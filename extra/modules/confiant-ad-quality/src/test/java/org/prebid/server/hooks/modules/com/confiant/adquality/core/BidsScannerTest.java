@@ -15,11 +15,8 @@ import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
-import org.prebid.server.auction.model.BidderResponse;
-import org.prebid.server.hooks.modules.com.confiant.adquality.model.GroupByIssues;
 import org.prebid.server.hooks.modules.com.confiant.adquality.model.RedisBidResponseData;
 import org.prebid.server.hooks.modules.com.confiant.adquality.model.RedisBidsData;
-import org.prebid.server.hooks.modules.com.confiant.adquality.util.AdQualityModuleTestUtils;
 
 import java.util.List;
 
@@ -50,7 +47,7 @@ public class BidsScannerTest {
     }
 
     @Test()
-    public void shouldStartRedisVerticle() {
+    public void startShouldStartRedisVerticle() {
         // given
         final Promise<Void> startFuture = Promise.promise();
 
@@ -62,7 +59,7 @@ public class BidsScannerTest {
     }
 
     @Test()
-    public void shouldReturnScanIsDisabledWhenApiIsNotInitialized() {
+    public void isScanDisabledFlagShouldReturnDisabledScanFlagValueWhenApiIsNotInitialized() {
         // given
         doReturn(null).when(readRedisNode).getRedisAPI();
 
@@ -75,7 +72,7 @@ public class BidsScannerTest {
     }
 
     @Test()
-    public void shouldReturnScanIsDisabledWhenRedisFlagIsTrue() {
+    public void isScanDisabledFlagShouldReturnEnabledScanFlagValueWhenRedisFlagIsTrue() {
         // given
         final RedisAPI redisAPI = getRedisEmulationWithAnswer("true");
         doReturn(redisAPI).when(readRedisNode).getRedisAPI();
@@ -89,7 +86,7 @@ public class BidsScannerTest {
     }
 
     @Test()
-    public void shouldReturnScanIsNotDisabledWhenRedisFlagIsFalse() {
+    public void isScanDisabledFlagShouldReturnEnabledScanFlagValueWhenRedisFlagIsFalse() {
         // given
         final RedisAPI redisAPI = getRedisEmulationWithAnswer("false");
         doReturn(redisAPI).when(readRedisNode).getRedisAPI();
@@ -103,37 +100,33 @@ public class BidsScannerTest {
     }
 
     @Test()
-    public void shouldReturnEmptyScanResultWhenApiIsNotInitialized() {
+    public void submitBidsShouldReturnEmptyScanResultWhenApiIsNotInitialized() {
         // given
         doReturn(null).when(readRedisNode).getRedisAPI();
 
         // when
         final Future<BidsScanResult> scanResult = bidsScannerTest.submitBids(RedisBidsData.builder().build());
-        final GroupByIssues<BidderResponse> groupByIssues = scanResult.result().toGroupByIssues(List.of());
 
         // then
         assertThat(scanResult.succeeded()).isTrue();
-        assertThat(groupByIssues.getWithIssues().size()).isEqualTo(0);
-        assertThat(groupByIssues.getWithoutIssues().size()).isEqualTo(0);
+        assertThat(scanResult.result().getBidScanResults().size()).isEqualTo(0);
     }
 
     @Test()
-    public void shouldReturnEmptyScanResultWhenThereIsNoBidderResponses() {
+    public void submitBidsShouldReturnEmptyScanResultWhenThereIsNoBidderResponses() {
         // given
         doReturn(redisAPI).when(readRedisNode).getRedisAPI();
 
         // when
         final Future<BidsScanResult> scanResult = bidsScannerTest.submitBids(RedisBidsData.builder().bresps(List.of()).build());
-        final GroupByIssues<BidderResponse> groupByIssues = scanResult.result().toGroupByIssues(List.of());
 
         // then
         assertThat(scanResult.succeeded()).isTrue();
-        assertThat(groupByIssues.getWithIssues().size()).isEqualTo(0);
-        assertThat(groupByIssues.getWithoutIssues().size()).isEqualTo(0);
+        assertThat(scanResult.result().getBidScanResults().size()).isEqualTo(0);
     }
 
     @Test()
-    public void shouldReturnEmptyScanResultWhenThereIsSomeBidderResponseAndScanIsDisabled() {
+    public void submitBidsShouldReturnEmptyScanResultWhenThereIsSomeBidderResponseAndScanIsDisabled() {
         // given
         final String redisResponse = "[[[{\"tag_key\": \"key_a\", \"imp_id\": \"imp_a\", \"issues\": [{ \"value\": \"ads.deceivenetworks.net\", \"spec_name\": \"malicious_domain\", \"first_adinstance\": \"e91e8da982bb8b7f80100426\"}]}]]]";
         final RedisAPI redisAPI = getRedisEmulationWithAnswer(redisResponse);
@@ -147,17 +140,14 @@ public class BidsScannerTest {
 
         // when
         final Future<BidsScanResult> scanResult = bidsScannerTest.submitBids(bidsData);
-        final GroupByIssues<BidderResponse> groupByIssues = scanResult.result()
-                .toGroupByIssues(List.of(AdQualityModuleTestUtils.getBidderResponse("bidder-a", "imp-a", "imp-id-a")));
 
         // then
         assertThat(scanResult.succeeded()).isTrue();
-        assertThat(groupByIssues.getWithIssues().size()).isEqualTo(0);
-        assertThat(groupByIssues.getWithoutIssues().size()).isEqualTo(1);
+        assertThat(scanResult.result().getBidScanResults().size()).isEqualTo(0);
     }
 
     @Test()
-    public void shouldReturnRedisScanResultFromReadNodeWhenThereAreSomeBidderResponsesAndScanIsEnabled() {
+    public void submitBidsShouldReturnRedisScanResultFromReadNodeWhenThereAreSomeBidderResponsesAndScanIsEnabled() {
         // given
         final String redisResponse = "[[[{\"tag_key\": \"key_a\", \"imp_id\": \"imp_a\", \"issues\": [{ \"value\": \"ads.deceivenetworks.net\", \"spec_name\": \"malicious_domain\", \"first_adinstance\": \"e91e8da982bb8b7f80100426\"}]}],[{\"tag_key\": \"key_b\", \"imp_id\": \"imp_b\"}]]]";
         final RedisAPI redisAPI = getRedisEmulationWithAnswer(redisResponse);
@@ -172,19 +162,14 @@ public class BidsScannerTest {
 
         // when
         final Future<BidsScanResult> scanResult = bidsScannerTest.submitBids(bidsData);
-        final GroupByIssues<BidderResponse> groupByIssues = scanResult.result()
-                .toGroupByIssues(List.of(
-                        AdQualityModuleTestUtils.getBidderResponse("bidder-a", "imp-a", "imp-id-a"),
-                        AdQualityModuleTestUtils.getBidderResponse("bidder-b", "imp-b", "imp-id-b")));
 
         // then
         assertThat(scanResult.succeeded()).isTrue();
-        assertThat(groupByIssues.getWithIssues().size()).isEqualTo(1);
-        assertThat(groupByIssues.getWithoutIssues().size()).isEqualTo(1);
+        assertThat(scanResult.result().getBidScanResults().size()).isEqualTo(2);
     }
 
     @Test()
-    public void shouldReturnRedisScanResultFromWriteNodeWhenReadNodeHasMissingResults() {
+    public void submitBidsShouldReturnRedisScanResultFromWriteNodeWhenReadNodeHasMissingResults() {
         // given
         final String readRedisResponse = "[[[{\"tag_key\": \"key_a\", \"imp_id\": \"imp_a\", \"ro_skipped\": \"true\"}]]]";
         final RedisAPI readRedisAPI = getRedisEmulationWithAnswer(readRedisResponse);
@@ -203,13 +188,10 @@ public class BidsScannerTest {
 
         // when
         final Future<BidsScanResult> scanResult = bidsScannerTest.submitBids(bidsData);
-        final GroupByIssues<BidderResponse> groupByIssues = scanResult.result()
-                .toGroupByIssues(List.of(AdQualityModuleTestUtils.getBidderResponse("bidder-a", "imp-a", "imp-id-a")));
 
         // then
         assertThat(scanResult.succeeded()).isTrue();
-        assertThat(groupByIssues.getWithIssues().size()).isEqualTo(1);
-        assertThat(groupByIssues.getWithoutIssues().size()).isEqualTo(0);
+        assertThat(scanResult.result().getBidScanResults().size()).isEqualTo(1);
     }
 
     private RedisAPI getRedisEmulationWithAnswer(String sendAnswer) {

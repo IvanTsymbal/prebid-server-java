@@ -10,7 +10,7 @@ public class RedisParserTest {
     private final RedisParser redisParser = new RedisParser(new ObjectMapper());
 
     @Test
-    public void shouldParseBidsScanResult() {
+    public void parseBidsScanResultShouldParseRedisResponseWhenItHasMinimalInfo() {
         // given
         final String redisResponse = "[[[{\"tag_key\": \"key_a\", \"imp_id\": \"imp_a\"}]],[[{\"tag_key\": \"key_b\", \"imp_id\": \"imp_b\"}]]]";
 
@@ -26,7 +26,7 @@ public class RedisParserTest {
     }
 
     @Test
-    public void shouldParseFullBidsScanResult() {
+    public void parseBidsScanResultShouldParseRedisResponseWhenItHasFullBidInfo() {
         // given
         final String redisResponse = "[[[{\n" +
                 "  \"tag_key\": \"tg\",\n" +
@@ -85,7 +85,7 @@ public class RedisParserTest {
     }
 
     @Test
-    public void shouldParseBidsScanResultWithError() {
+    public void parseBidsScanResultShouldParseRedisResponseWhenItHasAnErrorInfo() {
         // given
         final String redisResponse = "{\"code\": \"123\", \"message\": \"error message\", \"error\": true, \"dsp_id\": \"cri\"}";
 
@@ -98,7 +98,7 @@ public class RedisParserTest {
     }
 
     @Test
-    public void shouldParseBidsScanResultWithInvalidResponse() {
+    public void parseBidsScanResultShouldParseRedisResponseWhenItIsInvalid() {
         // given
         final String redisResponse = "invalid redis response";
 

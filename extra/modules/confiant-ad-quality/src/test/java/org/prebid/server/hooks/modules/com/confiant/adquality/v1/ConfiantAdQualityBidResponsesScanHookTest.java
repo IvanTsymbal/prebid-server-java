@@ -20,6 +20,7 @@ import org.prebid.server.bidder.model.BidderSeatBid;
 import org.prebid.server.hooks.execution.v1.bidder.AllProcessedBidResponsesPayloadImpl;
 import org.prebid.server.hooks.modules.com.confiant.adquality.core.BidsMapper;
 import org.prebid.server.hooks.modules.com.confiant.adquality.core.BidsScanResult;
+import org.prebid.server.hooks.modules.com.confiant.adquality.core.BidsScanResultProcessor;
 import org.prebid.server.hooks.modules.com.confiant.adquality.core.BidsScanner;
 import org.prebid.server.hooks.modules.com.confiant.adquality.core.RedisParser;
 import org.prebid.server.hooks.modules.com.confiant.adquality.util.AdQualityModuleTestUtils;
@@ -63,13 +64,16 @@ public class ConfiantAdQualityBidResponsesScanHookTest {
     @Mock
     private UserFpdActivityMask userFpdActivityMask;
 
+    private BidsScanResultProcessor bidsScanResultProcessor;
+
     private ConfiantAdQualityBidResponsesScanHook target;
 
     private final RedisParser redisParser = new RedisParser(new ObjectMapper());
 
     @Before
     public void setUp() {
-        target = new ConfiantAdQualityBidResponsesScanHook(bidsScanner, List.of(), userFpdActivityMask);
+        bidsScanResultProcessor = new BidsScanResultProcessor();
+        target = new ConfiantAdQualityBidResponsesScanHook(bidsScanner, bidsScanResultProcessor, List.of(), userFpdActivityMask);
     }
 
     @Test
@@ -176,7 +180,7 @@ public class ConfiantAdQualityBidResponsesScanHookTest {
                 .bidRequest(BidRequest.builder().cur(List.of("USD")).build())
                 .build();
 
-        target = new ConfiantAdQualityBidResponsesScanHook(bidsScanner, List.of(secureBidderName), userFpdActivityMask);
+        target = new ConfiantAdQualityBidResponsesScanHook(bidsScanner, bidsScanResultProcessor, List.of(secureBidderName), userFpdActivityMask);
 
         doReturn(List.of(secureBidderResponse, notSecureBadBidderResponse, notSecureGoodBidderResponse)).when(allProcessedBidResponsesPayload).bidResponses();
         doReturn(Future.succeededFuture(bidsScanResult)).when(bidsScanner).submitBids(any());
@@ -198,24 +202,26 @@ public class ConfiantAdQualityBidResponsesScanHookTest {
                 asList(notSecureGoodBidderResponse, secureBidderResponse));
 
         assertThat(payloadUpdate.apply(initPayloadToUpdate)).isEqualTo(resultPayloadAfterUpdate);
-        assertThat(invocationResult.result().analyticsTags().activities()).isEqualTo(singletonList(ActivityImpl.of(
-                "ad-scan", "success", List.of(
-                        ResultImpl.of("skipped", null, AppliedToImpl.builder()
-                                .bidders(List.of(secureBidderName))
-                                .impIds(List.of("imp_a"))
-                                .bidIds(List.of("bid_id_a"))
-                                .build()),
-                        ResultImpl.of("inspected-has-issue", null, AppliedToImpl.builder()
-                                .bidders(List.of(notSecureBadBidderName))
-                                .impIds(List.of("imp_b"))
-                                .bidIds(List.of("bid_id_b"))
-                                .build()),
-                        ResultImpl.of("inspected-no-issues", null, AppliedToImpl.builder()
-                                .bidders(List.of(notSecureGoodBidderName))
-                                .impIds(List.of("imp_c"))
-                                .bidIds(List.of("bid_id_c"))
-                                .build()))
-        )));
+
+        assertThat(invocationResult.result().analyticsTags().activities().size()).isEqualTo(1);
+        assertThat(invocationResult.result().analyticsTags().activities().get(0).name()).isEqualTo("ad-scan");
+        assertThat(invocationResult.result().analyticsTags().activities().get(0).status()).isEqualTo("success");
+        assertThat(invocationResult.result().analyticsTags().activities().get(0).results()).containsExactlyInAnyOrderElementsOf(List.of(
+                ResultImpl.of("skipped", null, AppliedToImpl.builder()
+                        .bidders(List.of(secureBidderName))
+                        .impIds(List.of("imp_a"))
+                        .bidIds(List.of("bid_id_a"))
+                        .build()),
+                ResultImpl.of("inspected-has-issue", null, AppliedToImpl.builder()
+                        .bidders(List.of(notSecureBadBidderName))
+                        .impIds(List.of("imp_b"))
+                        .bidIds(List.of("bid_id_b"))
+                        .build()),
+                ResultImpl.of("inspected-no-issues", null, AppliedToImpl.builder()
+                        .bidders(List.of(notSecureGoodBidderName))
+                        .impIds(List.of("imp_c"))
+                        .bidIds(List.of("bid_id_c"))
+                        .build())));
     }
 
     @Test
@@ -234,7 +240,7 @@ public class ConfiantAdQualityBidResponsesScanHookTest {
                 .bidRequest(BidRequest.builder().cur(List.of("USD")).build())
                 .build();
 
-        target = new ConfiantAdQualityBidResponsesScanHook(bidsScanner, List.of(secureBidderName), userFpdActivityMask);
+        target = new ConfiantAdQualityBidResponsesScanHook(bidsScanner, bidsScanResultProcessor, List.of(secureBidderName), userFpdActivityMask);
 
         doReturn(List.of(secureBidderResponse, notSecureBadBidderResponse, emptyBidderResponse)).when(allProcessedBidResponsesPayload).bidResponses();
         doReturn(Future.succeededFuture(bidsScanResult)).when(bidsScanner).submitBids(any());

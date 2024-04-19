@@ -1,5 +1,11 @@
 status-response: "ok"
 adapters:
+  adyoulike:
+    enabled: true
+    endpoint: http://protected-by-dev.confiant.com:80/adyoulike
+  rtbhouse:
+    enabled: true
+    endpoint: http://protected-by-dev.confiant.com:80/rtbhouse
   appnexus:
     enabled: true
   ix:
@@ -71,15 +77,19 @@ hooks:
         write-node:
           host: "127.0.0.1"
           port: 8467
-          password: "password-w"
+          password: "password-master"
         read-node:
           host: "127.0.0.1"
           port: 8468
-          password: "password-r"
+          password: "password-slave"
       redis-retry-config:
         short-interval-attempts: 60
         short-interval: 1000
         long-interval-attempts: 336
         long-interval: 1800000
+      brand-blocking-config:
+        config-url: "http://protected-by-dev.confiant.com:80/brands-config"
+        state-check-interval: 600000
+        timeout: 200
       scan-state-check-interval: 2900
       bidders-to-exclude-from-scan:
